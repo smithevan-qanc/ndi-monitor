@@ -3,3 +3,5 @@ uvicorn[standard]==0.34.0
 numpy>=2.0.0
 pillow>=11.0.0
 pygame
+numba
+llvmlite
