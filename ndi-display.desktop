@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=NDI Display
+Comment=Start NDI HDMI display on login
+Exec=env SDL_VIDEODRIVER=x11 NDI_LIB_PATH=/usr/local/lib/libndi.so /home/nlc-atlantic-media/ndi-monitor/venv/bin/python3 /home/nlc-atlantic-media/ndi-monitor/display.py
+X-GNOME-Autostart-enabled=true
+Terminal=false

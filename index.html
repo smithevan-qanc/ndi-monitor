@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ND Pi Monitor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0b0b0b;
+      color: #eee;
+      overflow-x: hidden;
+    }
+    .app { 
+      min-height: 100vh;
+      padding: 16px;
+    }
+    /* Dashboard */
+    .dashboard {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    @media (min-width: 900px) {
+      .dashboard {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        height: calc(100vh - 32px);
+      }
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 32px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      min-height: 300px;
+      max-height: 80vh;
+    }
+    @media (min-width: 900px) {
+      .card {
+        min-height: 0;
+        max-height: none;
+        overflow: hidden;
+      }
+    }
+    .card h2 { margin: 0px 0px 14px 8px; font-size: 18px; flex-shrink: 0; }
+    .card-content { 
+      flex: 1; 
+      display: flex; 
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+      gap: 14px;
+    }
+    .row { 
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: space-between;
+    }
+    .col { display: flex; flex-direction: column; gap: 14px; }
+    label { 
+      font-size: 14px;
+      /* color: #bbb; */
+      font-weight: 600;
+      padding-left: 8px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.1);
+      color: #eee;
+      font-size: 16px;
+    }
+    select, button {
+      padding: 8px 18px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #eee;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 18px;
+      font-size: 14px;
+    }
+    select { background: #fff; color: #000; }
+    select option { color: #000; background: #fff; }
+    .device-name-input {
+      width: 100%;
+      padding: 8px 4px;
+      margin-bottom: 14px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 18px;
+      background: #0b0b0b00;
+      color: #fff;
+      font-size: 20px;
+      text-align: center;
+      font-weight: 600;
+      outline: none;
+    }
+    .device-name-input::placeholder {
+      color: rgba(255, 255, 255, 0.4);
+      font-weight: 400;
+    }
+    button { cursor: pointer; }
+    button:hover { background: rgba(255, 255, 255, 0.10); }
+    .button-primary {
+      background: #2aa9ff;
+      color: #002b3f;
+      border-color: #2aa9ff;
+    }
+    .button-primary:hover { background: #47b6ff; }
+    .button-danger {
+      background: rgba(220, 80, 80, 0.8);
+      color: #fff;
+      border-color: rgba(220, 80, 80, 0.9);
+    }
+    .button-danger:hover { background: rgba(220, 80, 80, 1); }
+    .button-big { padding: 14px 16px; font-size: 16px; border-radius: 18px; }
+    .button-full { width: 100%; }
+    .mono { 
+      font-variant-numeric: tabular-nums; 
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 14px;
+      margin: 0px 0px 0px 14px;
+    }
+    #status { /* margin-top: 8px; */ color: #bbb; font-size: 12px; line-height: 1.3; flex-shrink: 0; text-align: center; }
+
+    /* Source list */
+    #sourceList {
+      display: flex;
+      /* grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); */
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+      overflow-y: auto;
+      min-height: 120px;
+      align-content: start;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 18px;
+    }
+    .sourceTile {
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.5s ease, border-color 0.5s ease;
+      font-size: 13px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .sourceTile:hover { background: rgba(255,255,255,0.10); }
+    .sourceTile.active { border-color: #2aa9ff; background: rgba(42,169,255,0.12); }
+
+    /* Logs */
+    #logsInline {
+      margin: 0;
+      padding: 14px;
+      font-size: 11px;
+      line-height: 1.4;
+      color: #cfd8dc;
+      white-space: pre-wrap;
+      word-break: break-word;
+      flex: 1;
+      min-height: 100px;
+      max-height: 200px;
+      overflow-y: auto;
+      background: rgb(20,20,20);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 18px;
+    }
+    @media (min-width: 900px) {
+      #logsInline {
+        max-height: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="dashboard">
+      <!-- Display Section -->
+      <div class="card">
+        <input id="deviceName" class="device-name-input" title="Change the display name of this device." placeholder="Display Name" />
+        <div class="card-content">
+          <div id="sourceList"></div>
+          <div class="row">
+            <button id="refreshBtn" type="button">Refresh Sources</button>
+          </div>
+        </div>
+        <button id="blankBtn" type="button" class="button-primary button-big button-full" style="margin-top: 14px;">Blank Display</button>
+      </div>
+
+      <!-- System Section -->
+      <div class="card">
+        <h2>System</h2>
+        <div class="col" style="flex: 1; min-height: 0; overflow: hidden;">
+          <div class="mono" id="selectedInfo">Source: (none)</div>
+          <div class="mono" id="healthInfo">Health: pending…</div>
+          <div class="row">
+            <button id="rebootBtn" type="button">System Reboot</button>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: #eee;">
+              <input type="checkbox" id="showFpsChk" checked style="width: 18px; height: 18px;" />
+              Show FPS on Display
+            </label>
+          </div>
+          <div class="row">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #eee; font-weight: normal;">
+              Output Resolution
+              <select id="resolutionSelect" style="padding: 6px 10px; font-size: 13px;">
+                <option value="">Loading...</option>
+              </select>
+            </label>
+          </div>
+          <div style="margin-top: 0px;">
+            <label for="noConnMsg">Display Message on No Connection</label>
+            <div style="font-size: 11px; color: #777; padding-left:8px;">Variables: &lt;ip&gt;, &lt;hostname&gt;, &lt;source&gt;, &lt;time&gt;</div>
+            <input id="noConnMsg" type="text" style="margin-top: 4px;" placeholder="Primary Message">
+          </div>
+          <div>
+            <input id="noConnSub" type="text" style="margin-top: -8px;" placeholder="Secondary Message" />
+          </div>
+          <div class="row" style="align-items: flex-end; gap: 12px;">
+            <button id="saveMsgBtn" type="button" style="margin-bottom: 18px;">Update</button>
+          </div>
+          <div id="status" title="Current Status">Loading…</div>
+          <div style="margin-top:7px; flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
+            <label style="padding-left: 14px; margin-bottom: 4px;">Logs</label>
+            <pre id="logsInline"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  
+
+<script>
+  const LS_KEY = 'ndi.selectedSourceName';
+  const statusEl = document.getElementById('status');
+  const refreshBtn = document.getElementById('refreshBtn');
+  const sourceListEl = document.getElementById('sourceList');
+  const selectedInfoEl = document.getElementById('selectedInfo');
+  const healthInfoEl = document.getElementById('healthInfo');
+  const rebootBtn = document.getElementById('rebootBtn');
+  const blankBtn = document.getElementById('blankBtn');
+  const noConnMsgEl = document.getElementById('noConnMsg');
+  const noConnSubEl = document.getElementById('noConnSub');
+  const saveMsgBtn = document.getElementById('saveMsgBtn');
+  const showFpsChk = document.getElementById('showFpsChk');
+  const resolutionSelect = document.getElementById('resolutionSelect');
+
+  const deviceNameEl = document.getElementById('deviceName');
+  const BASE_TITLE = 'ND Pi Monitor';
+
+  let pollTimer = null;
+  let listRefreshTimer = null;
+  let logsTimer = null;
+  let ws = null;
+  let wsReconnectTimer = null;
+
+  let wsWasConnected = false;  // Track if we had a connection before
+
+  function connectWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+      }
+      // If we were previously connected and reconnected, reload the page
+      // This handles the case where the Pi rebooted
+      if (wsWasConnected) {
+        console.log('Reconnected after disconnect - reloading page');
+        window.location.reload();
+        return;
+      }
+      wsWasConnected = true;
+    };
+    
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'config') {
+          applyConfigToUI(msg.data);
+        } else if (msg.type === 'logs') {
+          renderLogs(msg.data);
+        }
+      } catch (e) {
+        console.error('WebSocket message parse error:', e);
+      }
+    };
+    
+    ws.onclose = () => {
+      console.log('WebSocket closed, reconnecting in 2s...');
+      ws = null;
+      wsReconnectTimer = setTimeout(connectWebSocket, 2000);
+    };
+    
+    ws.onerror = (err) => {
+      console.error('WebSocket error:', err);
+      ws.close();
+    };
+  }
+
+  async function fetchConfig() {
+    try {
+      const r = await fetch('/api/config');
+      if (!r.ok) return null;
+      return await r.json();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function applyConfigToUI(config) {
+    if (!config) return;
+
+    // Update selected source display
+    if (config.selected_source) {
+      selectedInfoEl.textContent = `Source: ${config.selected_source}`;
+      // Sync localStorage if different
+      const cached = localStorage.getItem(LS_KEY);
+      if (cached !== config.selected_source) {
+        localStorage.setItem(LS_KEY, config.selected_source);
+        // Re-render source tiles to highlight the new selection
+        fetchSources().then(sources => renderSourceTiles(sources, config.selected_source)).catch(() => {});
+      }
+    } else {
+      selectedInfoEl.textContent = 'Source: (none)';
+    }
+
+    // Update HDMI blank button
+    updateBlankBtn({ blank: config.hdmi_blank });
+
+    // Update message fields (only if not focused to avoid interrupting typing)
+    if (document.activeElement !== noConnMsgEl) {
+      noConnMsgEl.value = config.no_connection_message || '';
+    }
+    if (document.activeElement !== noConnSubEl) {
+      noConnSubEl.value = config.no_connection_subtext || '';
+    }
+
+    // Update FPS checkbox
+    showFpsChk.checked = config.show_fps;
+
+    // Update device name (only if not focused to avoid interrupting typing)
+    if (document.activeElement !== deviceNameEl) {
+      deviceNameEl.value = config.device_name || '';
+    }
+    updatePageTitle(config.device_name);
+  }
+
+  function updatePageTitle(deviceName) {
+    if (deviceName && deviceName.trim()) {
+      document.title = `${deviceName.trim()} - ${BASE_TITLE}`;
+    } else {
+      document.title = BASE_TITLE;
+    }
+  }
+
+  async function syncConfig() {
+    const config = await fetchConfig();
+    if (config) {
+      applyConfigToUI(config);
+    }
+  }
+
+  async function fetchLogs() {
+    try {
+      const r = await fetch('/api/logs');
+      if (!r.ok) return [];
+      const j = await r.json();
+      return j.logs || [];
+    } catch (e) { return []; }
+  }
+
+  function renderLogs(logs) {
+    const body = document.getElementById('logsInline');
+    if (!body) return;
+    const lines = logs.map(l => `[${l.ts}] ${l.level}: ${l.msg}`);
+    const atBottom = Math.abs(body.scrollHeight - body.scrollTop - body.clientHeight) < 8;
+    body.textContent = lines.join('\n');
+    if (atBottom) body.scrollTop = body.scrollHeight;
+  }
+
+  function setStatus(msg) { statusEl.textContent = msg; }
+
+  async function loadResolutions() {
+    try {
+      const r = await fetch('/api/resolution');
+      if (!r.ok) {
+        resolutionSelect.innerHTML = '<option value="">Error loading</option>';
+        return;
+      }
+      const data = await r.json();
+      const current = data.current || '';
+      const available = data.available || [];
+      
+      resolutionSelect.innerHTML = '';
+      for (const res of available) {
+        const opt = document.createElement('option');
+        opt.value = res;
+        opt.textContent = res;
+        if (res === current) opt.selected = true;
+        resolutionSelect.appendChild(opt);
+      }
+    } catch (e) {
+      resolutionSelect.innerHTML = '<option value="">Error</option>';
+      console.error('Failed to load resolutions:', e);
+    }
+  }
+
+
+  async function fetchSources() {
+    const r = await fetch('/api/sources');
+    const j = await r.json();
+    return j.sources || [];
+  }
+
+  async function getMessage() {
+    try {
+      const r = await fetch('/api/message');
+      return await r.json();
+    } catch (e) {
+      return {};
+    }
+  }
+
+  async function saveMessage() {
+    try {
+      const payload = {
+        noConnectionMessage: noConnMsgEl.value || '',
+        noConnectionSubtext: noConnSubEl.value || ''
+      };
+      const r = await fetch('/api/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!r.ok) throw new Error(await r.text());
+      setStatus('Message saved');
+    } catch (e) {
+      setStatus(`Save failed: ${e.message}`);
+    }
+  }
+
+  function renderSourceTiles(sources, preferred) {
+    sourceListEl.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    for (const name of sources) {
+      const tile = document.createElement('div');
+      tile.className = 'sourceTile' + (preferred === name ? ' active' : '');
+      tile.textContent = name;
+      tile.title = name;
+      tile.addEventListener('click', async () => {
+        try {
+          await applySelection(name);
+          // Update active state
+          [...sourceListEl.children].forEach(c => c.classList.remove('active'));
+          tile.classList.add('active');
+        } catch (e) {
+          setStatus(`Failed to select source: ${e.message}`);
+        }
+      });
+      frag.appendChild(tile);
+    }
+    sourceListEl.appendChild(frag);
+  }
+
+  async function applySelection(name) {
+    if (!name) return;
+    setStatus(`Selecting: ${name}`);
+
+    // Save selection FIRST so it persists even if connection fails
+    localStorage.setItem(LS_KEY, name);
+    selectedInfoEl.textContent = `Source: ${name}`;
+
+    const r = await fetch('/api/select', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+
+    if (!r.ok) {
+      const err = await r.text();
+      // Selection is saved, will retry on next poll
+      healthInfoEl.textContent = 'Health: Connecting...';
+      setStatus(`Connection pending: ${name}`);
+      // Don't throw - start polling to retry
+      if (!pollTimer) {
+        pollTimer = setTimeout(() => retryConnection(name), 2000);
+      }
+      return;
+    }
+
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+
+    healthInfoEl.textContent = 'Health: OK';
+    setStatus(`Selected: ${name}`);
+  }
+
+  async function retryConnection(name) {
+    const currentCached = localStorage.getItem(LS_KEY) || '';
+    if (currentCached !== name) {
+      // User selected something else, stop retrying
+      pollTimer = null;
+      return;
+    }
+
+    try {
+      const r = await fetch('/api/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+
+      if (r.ok) {
+        pollTimer = null;
+        healthInfoEl.textContent = 'Health: OK';
+        setStatus(`Connected: ${name}`);
+        return;
+      }
+    } catch (e) {
+      // ignore, will retry
+    }
+
+    setStatus(`Retrying: ${name}`);
+    pollTimer = setTimeout(() => retryConnection(name), 2000);
+  }
+
+  async function initialLoad() {
+    const cached = localStorage.getItem(LS_KEY) || '';
+    if (!cached) {
+      // No cached source: load once and let the user pick.
+      try {
+        const sources = await fetchSources();
+        renderSourceTiles(sources, '');
+      } catch (e) {
+        // ignore
+      }
+      setStatus('Select a source');
+      return;
+    }
+
+    // Cached source exists: poll until it appears, then auto-monitor.
+    setStatus(`Looking for: ${cached}`);
+
+    const tick = async () => {
+      const currentCached = localStorage.getItem(LS_KEY) || '';
+      if (!currentCached) {
+        pollTimer = null;
+        return;
+      }
+
+      try {
+        const sources = await fetchSources();
+        renderSourceTiles(sources, currentCached);
+
+        if (sources.includes(currentCached)) {
+          await applySelection(currentCached);
+          return; // applySelection clears pollTimer
+        }
+        setStatus(`Looking for: ${currentCached}`);
+      } catch (e) {
+        // keep trying
+      }
+      pollTimer = setTimeout(tick, 1000);
+    };
+
+    await tick();
+  }
+
+  refreshBtn.addEventListener('click', async () => {
+    const cached = localStorage.getItem(LS_KEY) || '';
+    const sources = await fetchSources();
+    renderSourceTiles(sources, cached);
+    setStatus('Source list refreshed');
+  });
+
+  rebootBtn.addEventListener('click', async () => {
+    if (!confirm('Reboot the Raspberry Pi now?')) return;
+    try {
+      const r = await fetch('/api/reboot', { method: 'POST' });
+      if (!r.ok) throw new Error(await r.text());
+      setStatus('Rebooting…');
+    } catch (e) {
+      setStatus(`Reboot failed: ${e.message}`);
+    }
+  });
+
+  saveMsgBtn.addEventListener('click', saveMessage);
+
+  async function getHdmiBlank() {
+    try {
+      const r = await fetch('/api/hdmi');
+      return await r.json();
+    } catch (e) { return { blank: false }; }
+  }
+
+  async function setHdmiBlank(v) {
+    const r = await fetch('/api/hdmi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ blank: !!v })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    return await r.json();
+  }
+
+  function updateBlankBtn(state) {
+    const on = !!(state && state.blank);
+    blankBtn.textContent = on ? 'Show Display' : 'Blank Display';
+    if (on) {
+      blankBtn.classList.remove('button-primary');
+      blankBtn.classList.add('button-danger');
+    } else {
+      blankBtn.classList.remove('button-danger');
+      blankBtn.classList.add('button-primary');
+    }
+  }
+
+  blankBtn.addEventListener('click', async () => {
+    try {
+      const current = await getHdmiBlank();
+      const next = !(current && current.blank);
+      const state = await setHdmiBlank(next);
+      updateBlankBtn(state);
+      //setStatus(next ? 'Display blanked' : 'Display unblanked');
+    } catch (e) {
+      setStatus(`Blank toggle failed: ${e.message}`);
+    }
+  });
+
+  (async () => {
+    // Load all config from server and apply to UI
+    await syncConfig();
+
+    // Then do initial source discovery
+    initialLoad();
+
+    // Load available resolutions
+    await loadResolutions();
+
+    // Handle Show FPS checkbox change
+    showFpsChk.addEventListener('change', async () => {
+      try {
+        await fetch('/api/fps', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ show_fps: showFpsChk.checked })
+        });
+      } catch (e) {
+        console.error('Failed to set show_fps:', e);
+      }
+    });
+
+    // Handle resolution change
+    resolutionSelect.addEventListener('change', async () => {
+      const resolution = resolutionSelect.value;
+      if (!resolution) return;
+      try {
+        setStatus(`Setting resolution to ${resolution}...`);
+        const r = await fetch('/api/resolution', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resolution })
+        });
+        if (!r.ok) throw new Error(await r.text());
+        const data = await r.json();
+        if (data.reboot_required) {
+          if (confirm(`Resolution set to ${resolution}. Reboot now to apply?`)) {
+            await fetch('/api/reboot', { method: 'POST' });
+            setStatus('Rebooting to apply resolution...');
+          } else {
+            setStatus(`Resolution ${resolution} will apply on next reboot`);
+            await loadResolutions();
+          }
+        } else {
+          setStatus(`Resolution set to ${resolution}`);
+        }
+      } catch (e) {
+        setStatus(`Failed to set resolution: ${e.message}`);
+        // Reload to restore actual value
+        await loadResolutions();
+      }
+    });
+
+    // Handle device name changes - save on blur or Enter key
+    let deviceNameTimeout = null;
+    deviceNameEl.addEventListener('input', () => {
+      // Debounce: save after user stops typing for 1500ms
+      if (deviceNameTimeout) clearTimeout(deviceNameTimeout);
+      deviceNameTimeout = setTimeout(saveDeviceName, 1500);
+    });
+    deviceNameEl.addEventListener('blur', saveDeviceName);
+    deviceNameEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveDeviceName();
+        deviceNameEl.blur();
+      }
+    });
+
+    async function saveDeviceName() {
+      if (deviceNameTimeout) {
+        clearTimeout(deviceNameTimeout);
+        deviceNameTimeout = null;
+      }
+      try {
+        await fetch('/api/device_name', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_name: deviceNameEl.value })
+        });
+        updatePageTitle(deviceNameEl.value);
+      } catch (e) {
+        console.error('Failed to save device name:', e);
+      }
+    }
+
+    // Connect WebSocket for real-time config updates
+    connectWebSocket();
+
+    // Periodically refresh the source list every 10s while page is open
+    if (listRefreshTimer) clearInterval(listRefreshTimer);
+    listRefreshTimer = setInterval(async () => {
+      const cached = localStorage.getItem(LS_KEY) || '';
+      try {
+        const sources = await fetchSources();
+        renderSourceTiles(sources, cached);
+      } catch (e) {
+        // ignore transient errors
+      }
+    }, 10000);
+
+    window.addEventListener('beforeunload', () => {
+      if (listRefreshTimer) clearInterval(listRefreshTimer);
+      if (ws) ws.close();
+      if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+    });
+  })();
+</script>
+</body>
+</html>

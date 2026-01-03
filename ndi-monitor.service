@@ -1,0 +1,15 @@
+[Unit]
+Description=NDI Monitor Service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/ndi-monitor
+Environment="PATH=/home/pi/ndi-monitor/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/pi/ndi-monitor/venv/bin/python3 -m uvicorn app:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

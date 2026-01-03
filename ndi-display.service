@@ -1,0 +1,22 @@
+[Unit]
+Description=NDI Display Service (HDMI Output)
+After=network-online.target graphical.target
+Wants=network-online.target graphical.target
+
+[Service]
+Type=simple
+User=nlc-atlantic-media
+WorkingDirectory=/home/nlc-atlantic-media/ndi-monitor
+Environment="PATH=/home/nlc-atlantic-media/ndi-monitor/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="DISPLAY=:0"
+Environment="SDL_VIDEODRIVER=x11"
+Environment="NDI_LIB_PATH=/usr/local/lib/libndi.so"
+ExecStartPre=/bin/sleep 3
+ExecStart=/home/nlc-atlantic-media/ndi-monitor/venv/bin/python3 display.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target
