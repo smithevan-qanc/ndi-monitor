@@ -549,7 +549,14 @@ def set_resolution(payload: dict):
         raise HTTPException(status_code=400, detail="Invalid resolution format")
     
     try:
-        # First get the output name (usually HDMI-A-1 on Pi 5)
+        # Parse resolution
+        width, height = resolution.lower().split("x")
+        width, height = int(width), int(height)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid resolution format")
+    
+    try:
+        # Get xrandr output and parse available modes for the connected output
         result = subprocess.run(
             ["xrandr"],
             capture_output=True,
@@ -557,58 +564,91 @@ def set_resolution(payload: dict):
             timeout=5,
             env={**os.environ, "DISPLAY": ":0"}
         )
-        
+        xrandr_out = result.stdout
         output_name = None
-        for line in result.stdout.split("\n"):
+        available_modes = []
+        for line in xrandr_out.split("\n"):
             if " connected" in line:
                 output_name = line.split()[0]
+            elif output_name and line.startswith("   "):
+                parts = line.split()
+                if parts and "x" in parts[0]:
+                    available_modes.append(parts[0])
+            elif output_name and not line.startswith(" "):
+                # End of this output's modes
                 break
-        
+
         if not output_name:
             raise HTTPException(status_code=500, detail="No connected display found")
-        
+        if resolution not in available_modes:
+            raise HTTPException(status_code=400, detail=f"Requested resolution {resolution} not available. Available: {available_modes}")
+
+        # Use the largest available mode for --fb to avoid BadMatch
+        def mode_key(m):
+            try:
+                w, h = map(int, m.lower().split("x"))
+                return w * h
+            except Exception:
+                return 0
+        largest_mode = max(available_modes, key=mode_key)
+
         # Stop the display service first so it releases the screen
-        subprocess.run(
+        stop_res = subprocess.run(
             ["sudo", "systemctl", "stop", "ndi-display"],
             capture_output=True,
             timeout=10
         )
-        
-        # Brief pause to let display release
-        time.sleep(0.5)
-        
-        # Set the resolution
+        logging.getLogger("app").info(f"Stopped ndi-display: {stop_res.stdout} {stop_res.stderr}")
+
+        # Wait longer to ensure display is released
+        time.sleep(2.0)
+
+        # Try setting the mode with --fb set to the largest mode
+        set_cmd = [
+            "xrandr", "--output", output_name, "--mode", resolution, "--fb", largest_mode
+        ]
         result = subprocess.run(
-            ["xrandr", "--output", output_name, "--mode", resolution],
+            set_cmd,
             capture_output=True,
             text=True,
             timeout=10,
             env={**os.environ, "DISPLAY": ":0"}
         )
-        
+        logging.getLogger("app").info(f"xrandr set mode: {set_cmd} -> {result.stdout} {result.stderr}")
+
         if result.returncode != 0:
-            # Try to restart display service even if xrandr failed
-            subprocess.run(["sudo", "systemctl", "start", "ndi-display"], capture_output=True, timeout=10)
-            raise HTTPException(status_code=500, detail=f"xrandr failed: {result.stderr}")
-        
+            # Try alternative: set mode without --fb
+            alt_cmd = ["xrandr", "--output", output_name, "--mode", resolution]
+            result2 = subprocess.run(
+                alt_cmd,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env={**os.environ, "DISPLAY": ":0"}
+            )
+            logging.getLogger("app").warning(f"xrandr fallback: {alt_cmd} -> {result2.stdout} {result2.stderr}")
+            if result2.returncode != 0:
+                # Try to restart display service even if xrandr failed
+                subprocess.run(["sudo", "systemctl", "start", "ndi-display"], capture_output=True, timeout=10)
+                raise HTTPException(status_code=500, detail=f"xrandr failed: {result.stderr or result2.stderr}")
+
         # Restart the display service to pick up new resolution
-        subprocess.run(
+        start_res = subprocess.run(
             ["sudo", "systemctl", "start", "ndi-display"],
             capture_output=True,
             timeout=10
         )
-        
+        logging.getLogger("app").info(f"Started ndi-display: {start_res.stdout} {start_res.stderr}")
+
         logging.getLogger("app").info(f"Resolution set to: {resolution}")
         return {"ok": True, "resolution": resolution}
     except subprocess.TimeoutExpired:
-        # Try to restart display service on timeout
         subprocess.run(["sudo", "systemctl", "start", "ndi-display"], capture_output=True, timeout=10)
         raise HTTPException(status_code=500, detail="xrandr timed out")
     except HTTPException:
         raise
     except Exception as e:
         logging.getLogger("app").warning(f"Failed to set resolution: {e}")
-        # Try to restart display service on error
         subprocess.run(["sudo", "systemctl", "start", "ndi-display"], capture_output=True, timeout=10)
         raise HTTPException(status_code=500, detail=str(e))
 

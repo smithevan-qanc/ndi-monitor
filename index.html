@@ -593,7 +593,7 @@
   });
 
   rebootBtn.addEventListener('click', async () => {
-    if (!confirm('Reboot the Raspberry Pi now?')) return;
+    if (!confirm('Service will temporarily stop. Reboot now?')) return;
     try {
       const r = await fetch('/api/reboot', { method: 'POST' });
       if (!r.ok) throw new Error(await r.text());
@@ -607,13 +607,13 @@
 
   async function getHdmiBlank() {
     try {
-      const r = await fetch('/api/hdmi');
+      const r = await fetch('/api/blank');
       return await r.json();
     } catch (e) { return { blank: false }; }
   }
 
   async function setHdmiBlank(v) {
-    const r = await fetch('/api/hdmi', {
+    const r = await fetch('/api/blank', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ blank: !!v })
@@ -683,9 +683,9 @@
         if (!r.ok) throw new Error(await r.text());
         const data = await r.json();
         if (data.reboot_required) {
-          if (confirm(`Resolution set to ${resolution}. Reboot now to apply?`)) {
+          if (confirm(`Resolution set to ${resolution}. Reboot now?`)) {
             await fetch('/api/reboot', { method: 'POST' });
-            setStatus('Rebooting to apply resolution...');
+            setStatus('Rebooting…');
           } else {
             setStatus(`Resolution ${resolution} will apply on next reboot`);
             await loadResolutions();
